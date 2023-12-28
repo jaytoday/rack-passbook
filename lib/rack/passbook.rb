@@ -3,22 +3,29 @@ require 'rack/contrib'
 
 require 'sinatra/base'
 require 'sinatra/param'
+require 'rack'
 
 require 'sequel'
 
 module Rack
   class Passbook < Sinatra::Base
-    VERSION = '0.0.1'
 
     use Rack::PostBodyContentTypeParser
     helpers Sinatra::Param
 
-    Sequel.extension :core_extensions, :migration, :pg_hstore, :pg_hstore_ops
-
-    autoload :Pass,         ::File.join(::File.dirname(__FILE__), 'passbook/models/pass')
-    autoload :Registration, ::File.join(::File.dirname(__FILE__), 'passbook/models/registration')
+    autoload :Pass,         'rack/passbook/models/pass'
+    autoload :Registration, 'rack/passbook/models/registration'
 
     disable :raise_errors, :show_exceptions
+
+    configure do
+      Sequel.extension :core_extensions, :migration, :pg_hstore, :pg_hstore_ops
+
+      if ENV['DATABASE_URL']
+        DB = Sequel.connect(ENV['DATABASE_URL'])
+        Sequel::Migrator.run(DB, ::File.join(::File.dirname(__FILE__), "passbook/migrations"), table: 'passbook_schema_info')
+      end
+    end
 
     before do
       content_type :json
@@ -45,7 +52,7 @@ module Rack
       @passes = Pass.filter(pass_type_identifier: params[:pass_type_identifier]).join(Registration.dataset, device_library_identifier: params[:device_library_identifier])
       halt 404 if @passes.empty?
 
-      @passes = @passes.filter('passes.updated_at > ?', params[:passesUpdatedSince]) if params[:passesUpdatedSince]
+      @passes = @passes.filter("#{Pass.table_name}.updated_at > ?", Time.parse(params[:passesUpdatedSince])) if params[:passesUpdatedSince]
 
       if @passes.any?
         {
@@ -73,7 +80,6 @@ module Rack
       status = @registration.new? ? 201 : 200
 
       @registration.save
-      p @registration
       halt 406 unless @registration.valid?
 
       halt status

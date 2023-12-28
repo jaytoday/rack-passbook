@@ -1,8 +1,10 @@
+# frozen_string_literal: true
+
 Sequel.migration do
   up do
-    run %{CREATE EXTENSION hstore;}
+    run %(CREATE EXTENSION IF NOT EXISTS hstore;)
 
-    create_table :passbook_devices do
+    create_table :passbook_passes do
       primary_key :id
 
       column :pass_type_identifier, :varchar, unique: true, empty: false
@@ -28,9 +30,9 @@ Sequel.migration do
       index :device_library_identifier
     end
   end
-  
+
   down do
-    drop_table :devices
-    drop_table :registrations
+    drop_table :passbook_passes
+    drop_table :passbook_registrations
   end
 end
